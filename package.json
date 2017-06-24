@@ -7,6 +7,10 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node index.js"
   },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ryderdonahue/discord-stockbot.git"
+  },
   "author": "Ryder Donahue",
   "license": "ISC",
   "dependencies": {
@@ -15,6 +19,8 @@
     "discord.js": "^11.1.0",
     "express": "^4.15.3",
     "node-fetch": "^1.7.1",
+    "node-persist": "^2.0.11",
     "xml-js": "^1.3.2"
-  }
+  },
+  "devDependencies": {}
 }

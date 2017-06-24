@@ -9,6 +9,7 @@ var storage = require('node-persist');
 var users = {};
 var market = {};
 var myChannel = null;
+var myChannelId = undefined;
 var marketMonitorRate = 1800000;
 var orders = [];
 var version = 1;
@@ -34,7 +35,7 @@ storage.init().then(function () {
       console.log("NEW BOT OR FILE FAULT, NO USERS FILE DETECTED. CREATING...");
       await storage.setItem("users", users);
       await storage.setItem("market", market);
-      await storage.setItem("myChannel", myChannel);
+      await storage.setItem("myChannelId", myChannelId);
       await storage.setItem("orders", orders);
       await storage.setItem("marketMonitorRate", marketMonitorRate);
       await storage.setItem("version", version);
@@ -43,7 +44,7 @@ storage.init().then(function () {
       version = value;
       users = await storage.getItem("users");
       market = await storage.getItem("market");
-      myChannel = await storage.getItem("myChannel");
+      myChannelId = await storage.getItem("myChannelId");
       orders = await storage.getItem("orders");
       marketMonitorRate = await storage.getItem("marketMonitorRate");
     }
@@ -51,13 +52,21 @@ storage.init().then(function () {
 
     client.on('ready', () => {
       console.log(botKey.apiKey());
-      setInterval(processMarket, 5000);
+      setInterval(processMarket, marketMonitorRate);
+
+      if (myChannelId !== undefined) {
+        client.channels.forEach(channel => {
+          if (channel.id == myChannelId) {
+            myChannel = channel;
+          }
+        });
+      }
     });
 
     client.on('message', async function (message) {
       if (message.content.startsWith("#monitor channel")) {
         myChannel = message.channel;
-        setItem('myChannel', myChannel);
+        setItem('myChannelId', myChannel.id);
 
         myChannel.sendMessage("Monitoring #" + message.channel.name);
       }
@@ -109,27 +118,8 @@ storage.init().then(function () {
           var amt = Number(params[1]);
           var stock = await getStock(params[0].toUpperCase());
           if (stock) {
-            if (user.cash - stock.LastTradeAmount * amt > 0) {
-              message.reply("```BUY: " + stock.Symbol + "\t AMOUNT: " + amt +
-                "\t PRICE: $" + stock.LastTradeAmount + "\t\nTOTAL: $" + (stock.LastTradeAmount * amt).toFixed(2) + "```");
-              if (!user.stocks[stock.Symbol]) {
-                user.stocks[stock.Symbol] = 0;
-              }
-
-              user.cash -= stock.LastTradeAmount * amt;
-              user.stocks[stock.Symbol] += amt;
-              user.trades.push({
-                timestamp: Date(),
-                tradeType: "BUY",
-                symbol: stock.Symbol,
-                amount: amt,
-                price: stock.LastTradeAmount
-              })
-
-              setItem('users', users);
-            } else {
-              message.reply("you are short $" + Math.abs(user.cash - stock.LastTradeAmount * amt).toFixed(2) + " for this transaction");
-            }
+            buyStock(user, stock, amt)
+            setItem('users', users);
           }
         }
       }
@@ -142,23 +132,8 @@ storage.init().then(function () {
           var stock = await getStock(params[0].toUpperCase());
           var amt = Number(params[1]);
           if (stock) {
-            if (user.stocks[stock.Symbol] && user.stocks[stock.Symbol] >= amt) {
-              user.stocks[stock.Symbol] -= amt;
-              user.cash += stock.LastTradeAmount * amt;
-              message.reply("```SELL: " + stock.Symbol + "\t AMOUNT: " + params[1] + "\t PRICE: $" +
-                stock.LastTradeAmount + "\t \nTOTAL: $" + (stock.LastTradeAmount * amt) + "```");
-              user.trades.push({
-                timestamp: Date(),
-                tradeType: "SELL",
-                symbol: stock.Symbol,
-                amount: params[1],
-                price: stock.LastTradeAmount
-              });
-
-              setItem('users', users);
-            } else {
-              message.reply("you dont have this many shares to sell!");
-            }
+            sellStock(user, stock, amt);
+            setItem('users', users);
           }
         }
       }
@@ -255,7 +230,6 @@ function ConvertStock(quote) {
   };
 
   return stock;
-  // market[stock.Symbol];
 }
 
 function processMarket() {
@@ -295,7 +269,9 @@ function buyStock(user, stock, amount) {
       }
 
       user.cash -= stock.LastTradeAmount * amount;
+
       user.stocks[stock.Symbol] += amount;
+      user.costBasis[stock.Symbol] += stock.LastTradeAmount * amount;
       user.trades.push({
         timestamp: Date(),
         tradeType: "BUY",
@@ -305,10 +281,10 @@ function buyStock(user, stock, amount) {
       })
 
       setItem('users', users);
-      myChannel.sendMessage("<@" + user.userId + ">\n ```BUY: " + stock.Symbol + "\t AMOUNT: " + amount +
+      myChannel.sendMessage("<@" + user.userUid + ">```BUY: " + stock.Symbol + "\t AMOUNT: " + amount +
         "\t PRICE: $" + stock.LastTradeAmount + "\t\nTOTAL: $" + (stock.LastTradeAmount * amount).toFixed(2) + "```");
     } else {
-      myChannel.sendMessage("<@" + user.userId + ">\n you are short $" + Math.abs(user.cash - stock.LastTradeAmount * amount).toFixed(2) + " for this transaction");
+      myChannel.sendMessage("<@" + user.userUid + ">\n you are short $" + Math.abs(user.cash - stock.LastTradeAmount * amount).toFixed(2) + " for this transaction");
     }
   }
 }
@@ -317,8 +293,11 @@ function sellStock(user, stock, amount) {
   if (stock && user && amount > 0) {
     if (user.stocks[stock.Symbol] && user.stocks[stock.Symbol] >= amt) {
       user.stocks[stock.Symbol] -= amt;
+      user.costBasis[stock.Symbol] -= stock.LastTradeAmount * amt;
+
       user.cash += stock.LastTradeAmount * amt;
-      message.reply("```SELL: " + stock.Symbol + "\t AMOUNT: " + params[1] + "\t PRICE: $" +
+      
+      myChannel.sendMessage("<@" + user.userUid + ">```SELL: " + stock.Symbol + "\t AMOUNT: " + params[1] + "\t PRICE: $" +
         stock.LastTradeAmount + "\t \nTOTAL: $" + (stock.LastTradeAmount * amt) + "```");
       user.trades.push({
         timestamp: Date(),
@@ -329,6 +308,9 @@ function sellStock(user, stock, amount) {
       });
 
       setItem('users', users);
+    } else {
+      
+      myChannel.sendMessage("<@" + user.userUid + ">\nyou dont have this many shares to sell!");
     }
   }
 }
@@ -344,9 +326,11 @@ async function registerUser(userId, message) {
   message.reply("welcome!\nEnjoy this **$10,000** on the house!\n" + printRules());
   users[userId] = {
     userId: userId,
+    userUid: message.author.id,
     username: message.author.username,
     cash: 10000,
     stocks: {},
+    costBasis: {},
     watching: [],
     trades: [],
   }

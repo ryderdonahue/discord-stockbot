@@ -69,6 +69,18 @@ storage.init().then(function () {
         setItem('myChannelId', myChannel.id);
 
         myChannel.sendMessage("Monitoring #" + message.channel.name);
+        myChannel.sendMessage(printCommands());
+      }
+
+      if (message.content.startsWith("#help")) {
+        myChannel.sendMessage(printCommands());
+      }
+
+      if (message.content.startsWith("#cash")) {
+        if (users[message.author.tag]) {
+          var user = users[message.author.tag];
+          message.reply('Cash: $' + user.cash.toFixed(2))
+        }
       }
 
       if (message.content.startsWith("#quote")) {
@@ -233,8 +245,8 @@ function ConvertStock(quote) {
 }
 
 function processMarket() {
-  if (myChannel) {
-    myChannel.sendMessage("processing orders...");
+  if (myChannel && checkMarketOpen(false)) {
+    // myChannel.sendMessage("processing orders...");
     for (let i = orders.length - 1; i >= 0; i--) {
       let currentOrder = orders[i];
       let stock = getStock(currentOrder.symbol);
@@ -262,57 +274,79 @@ function processMarket() {
 }
 
 function buyStock(user, stock, amount) {
-  if (stock && user && amount > 0) {
-    if (user.cash - stock.LastTradeAmount * amount > 0) {
-      if (!user.stocks[stock.Symbol]) {
-        user.stocks[stock.Symbol] = 0;
+  if (checkMarketOpen(true)) {
+    if (stock && user && amount > 0) {
+      if (user.cash - stock.LastTradeAmount * amount > 0) {
+        if (!user.stocks[stock.Symbol]) {
+          user.stocks[stock.Symbol] = 0;
+        }
+
+        user.cash -= stock.LastTradeAmount * amount;
+
+        user.stocks[stock.Symbol] += amount;
+        user.costBasis[stock.Symbol] += stock.LastTradeAmount * amount;
+        user.trades.push({
+          timestamp: Date(),
+          tradeType: "BUY",
+          symbol: stock.Symbol,
+          amount: amount,
+          price: stock.LastTradeAmount
+        })
+
+        setItem('users', users);
+        myChannel.sendMessage("<@" + user.userUid + ">```BUY: " + stock.Symbol + "\t AMOUNT: " + amount +
+          "\t PRICE: $" + stock.LastTradeAmount + "\t\nTOTAL: $" + (stock.LastTradeAmount * amount).toFixed(2) + "```");
+      } else {
+        myChannel.sendMessage("<@" + user.userUid + ">\n you are short $" + Math.abs(user.cash - stock.LastTradeAmount * amount).toFixed(2) + " for this transaction");
       }
-
-      user.cash -= stock.LastTradeAmount * amount;
-
-      user.stocks[stock.Symbol] += amount;
-      user.costBasis[stock.Symbol] += stock.LastTradeAmount * amount;
-      user.trades.push({
-        timestamp: Date(),
-        tradeType: "BUY",
-        symbol: stock.Symbol,
-        amount: amount,
-        price: stock.LastTradeAmount
-      })
-
-      setItem('users', users);
-      myChannel.sendMessage("<@" + user.userUid + ">```BUY: " + stock.Symbol + "\t AMOUNT: " + amount +
-        "\t PRICE: $" + stock.LastTradeAmount + "\t\nTOTAL: $" + (stock.LastTradeAmount * amount).toFixed(2) + "```");
-    } else {
-      myChannel.sendMessage("<@" + user.userUid + ">\n you are short $" + Math.abs(user.cash - stock.LastTradeAmount * amount).toFixed(2) + " for this transaction");
     }
   }
 }
 
-function sellStock(user, stock, amount) {
-  if (stock && user && amount > 0) {
-    if (user.stocks[stock.Symbol] && user.stocks[stock.Symbol] >= amt) {
-      user.stocks[stock.Symbol] -= amt;
-      user.costBasis[stock.Symbol] -= stock.LastTradeAmount * amt;
+function sellStock(user, stock, amt) {
+  if (checkMarketOpen(true)) {
+    if (stock && user && amt > 0) {
+      if (user.stocks[stock.Symbol] && user.stocks[stock.Symbol] >= amt) {
+        user.stocks[stock.Symbol] -= amt;
+        user.costBasis[stock.Symbol] -= stock.LastTradeAmount * amt;
+        if (user.stocks[stock.Symbol] == 0) {
+          delete user.stocks[stock.Symbol];
+        }
 
-      user.cash += stock.LastTradeAmount * amt;
-      
-      myChannel.sendMessage("<@" + user.userUid + ">```SELL: " + stock.Symbol + "\t AMOUNT: " + params[1] + "\t PRICE: $" +
-        stock.LastTradeAmount + "\t \nTOTAL: $" + (stock.LastTradeAmount * amt) + "```");
-      user.trades.push({
-        timestamp: Date(),
-        tradeType: "SELL",
-        symbol: stock.Symbol,
-        amount: params[1],
-        price: stock.LastTradeAmount
-      });
+        user.cash += stock.LastTradeAmount * amt;
 
-      setItem('users', users);
-    } else {
-      
-      myChannel.sendMessage("<@" + user.userUid + ">\nyou dont have this many shares to sell!");
+        myChannel.sendMessage("<@" + user.userUid + ">```SELL: " + stock.Symbol + "\t AMOUNT: " + amt + "\t PRICE: $" +
+          stock.LastTradeAmount + "\t \nTOTAL: $" + (stock.LastTradeAmount * amt) + "```");
+        user.trades.push({
+          timestamp: Date(),
+          tradeType: "SELL",
+          symbol: stock.Symbol,
+          amount: amt,
+          price: stock.LastTradeAmount
+        });
+
+        setItem('users', users);
+      } else {
+
+        myChannel.sendMessage("<@" + user.userUid + ">\nyou dont have this many shares to sell!");
+      }
     }
   }
+}
+
+function checkMarketOpen(showMessage) {
+  let hour = new Date().getUTCHours();
+  let day = new Date().getUTCDay();
+  let minute = new Date().getUTCMinutes();
+  if ((hour > 13 || (hour == 13 && minute == 30)) && hour < 20 && day <= 5) {
+    return true;
+  }
+
+  if (showMessage) {
+    myChannel.sendMessage("Markets are closed, no orders can be made until they reopen. \nNew York Stock Exchange is open Mon-Fri, 9:30AM-4:00PM");
+  }
+
+  return false;
 }
 
 async function registerUser(userId, message) {
@@ -341,6 +375,15 @@ async function registerUser(userId, message) {
 function printRules() {
   return "```All players start with $10,000\nMarkets open at 9AM EST\nMarkets close at 5PM EAST\nTrades are free\nPortfolios are public\nDaily performance is reported at market close\n```"
 }
+
+function printCommands() {
+  return `**Bot Commands**\n\`\`\`
+  #register\tRegisters user with the bot. Also can be used to reset account.\n\n
+  #portfolio\tDisplays the users current portfolio\n\n
+  #cash\tQuickly shows your remaining cash\n\n
+  #quote SYM \tQueries the market for a quote on a specific stock.\nex: #quote MSFT\n\n
+  #buy SYM AMT\tbuys stock with symbol 'SYM' in amount 'AMT'\nex: #buy MSFT 5\n\n
+  #sell SYM AMT\tsells stock with symbol 'SYM' in amount 'AMT'\nex: #sell MSFT 5\n\n\`\`\``}
 
 async function getSummary(userId) {
   var output = "";

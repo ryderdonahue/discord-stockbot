@@ -21,174 +21,223 @@ var version = 1;
   type:
   action:
   timestamp:
+  orderId: 
 */
 
 function setItem(key, value) {
   storage.setItem(key, value);
 }
 
-storage.init().then(function () {
 
-  var values = storage.values();
-  storage.getItem('version', async function (err, value) {
-    if (value === undefined) {
-      console.log("NEW BOT OR FILE FAULT, NO USERS FILE DETECTED. CREATING...");
-      await storage.setItem("users", users);
-      await storage.setItem("market", market);
-      await storage.setItem("myChannelId", myChannelId);
-      await storage.setItem("orders", orders);
-      await storage.setItem("marketMonitorRate", marketMonitorRate);
-      await storage.setItem("version", version);
-    } else {
-      console.log("PREVIOUS ");
-      version = value;
-      users = await storage.getItem("users");
-      market = await storage.getItem("market");
-      myChannelId = await storage.getItem("myChannelId");
-      orders = await storage.getItem("orders");
-      marketMonitorRate = await storage.getItem("marketMonitorRate");
+storage.initSync();
+
+
+var values = storage.values();
+storage.getItem('version', async function (err, value) {
+  if (value === undefined) {
+    console.log("NEW BOT OR FILE FAULT, NO USERS FILE DETECTED. CREATING...");
+    await storage.setItem("users", users);
+    await storage.setItem("market", market);
+    await storage.setItem("myChannelId", myChannelId);
+    await storage.setItem("orders", orders);
+    await storage.setItem("marketMonitorRate", marketMonitorRate);
+    await storage.setItem("version", version);
+  } else {
+    console.log("PREVIOUS ");
+    version = value;
+    users = await storage.getItem("users");
+    market = await storage.getItem("market");
+    myChannelId = await storage.getItem("myChannelId");
+    await storage.setItem("orders", orders);
+    orders = await storage.getItem("orders");
+    marketMonitorRate = await storage.getItem("marketMonitorRate");
+  }
+}).then(() => {
+
+  client.on('ready', () => {
+    console.log(botKey.apiKey());
+    setInterval(processMarket, marketMonitorRate);
+
+    if (myChannelId !== undefined) {
+      client.channels.forEach(channel => {
+        if (channel.id == myChannelId) {
+          myChannel = channel;
+        }
+      });
     }
-  }).then(() => {
+  });
 
-    client.on('ready', () => {
-      console.log(botKey.apiKey());
-      setInterval(processMarket, marketMonitorRate);
+  client.on('message', async function (message) {
+    if (message.content.startsWith("#monitor channel")) {
+      myChannel = message.channel;
+      setItem('myChannelId', myChannel.id);
 
-      if (myChannelId !== undefined) {
-        client.channels.forEach(channel => {
-          if (channel.id == myChannelId) {
-            myChannel = channel;
-          }
-        });
+      myChannel.sendMessage("Monitoring #" + message.channel.name);
+      myChannel.sendMessage(printCommands());
+    }
+
+    if (message.content.startsWith("#help")) {
+      myChannel.sendMessage(printCommands());
+    }
+
+    if (message.content.startsWith("#cash")) {
+      if (users[message.author.tag]) {
+        var user = users[message.author.tag];
+        message.reply('Cash: $' + user.cash.toFixed(2))
       }
-    });
+    }
 
-    client.on('message', async function (message) {
-      if (message.content.startsWith("#monitor channel")) {
-        myChannel = message.channel;
-        setItem('myChannelId', myChannel.id);
+    if (message.content.startsWith("#quote")) {
+      try {
+        var stock = message.content.slice(6, message.content.length).trim();
+        if (stock.length >= 1 && stock.length <= 10) {
+          var options = {
+            host: 'ws.cdyne.com',
+            port: 80,
+            path: '/delayedstockquote/delayedstockquote.asmx/GetQuote?StockSymbol=' + stock.trim() + '&LicenseKey=0'
+          };
 
-        myChannel.sendMessage("Monitoring #" + message.channel.name);
-        myChannel.sendMessage(printCommands());
-      }
+          http.get(options, function (resp) {
+            resp.setEncoding('utf8');
 
-      if (message.content.startsWith("#help")) {
-        myChannel.sendMessage(printCommands());
-      }
-
-      if (message.content.startsWith("#cash")) {
-        if (users[message.author.tag]) {
-          var user = users[message.author.tag];
-          message.reply('Cash: $' + user.cash.toFixed(2))
-        }
-      }
-
-      if (message.content.startsWith("#quote")) {
-        try {
-          var stock = message.content.slice(6, message.content.length).trim();
-          if (stock.length == 3 || stock.length == 4) {
-            var options = {
-              host: 'ws.cdyne.com',
-              port: 80,
-              path: '/delayedstockquote/delayedstockquote.asmx/GetQuote?StockSymbol=' + stock.trim() + '&LicenseKey=0'
-            };
-
-            http.get(options, function (resp) {
-              resp.setEncoding('utf8');
-
-              resp.on('data', function (chunk) {
-                try {
-                  var result1 = convert.xml2js(chunk, {
-                    compact: true,
-                    spaces: 4
-                  });
-                  message.channel.send(formatQuote(result1.QuoteData));
-                } catch (e) {
-                  message.channel.send("something went wrong :\\");
-                }
-              });
-            }).on("error", function (e) {
-              console.log("Got error: " + e.message);
+            resp.on('data', function (chunk) {
+              try {
+                var result1 = convert.xml2js(chunk, {
+                  compact: true,
+                  spaces: 4
+                });
+                message.channel.send(formatQuote(result1.QuoteData));
+              } catch (e) {
+                message.channel.send("something went wrong :\\");
+              }
             });
+          }).on("error", function (e) {
+            console.log("Got error: " + e.message);
+          });
+        } else {
+          message.channel.send("invalid stock symbol");
+        }
+      } catch (e) {
+        message.channel.send("something went wrong :\\");
+      }
+    }
+
+    if (message.content.startsWith("#register")) {
+      registerUser(message.author.tag, message);
+    }
+
+    if (message.content.startsWith("#buy")) {
+      var command = message.content.slice(4, message.content.length).trim();
+      var params = command.split(' ');
+      var user = users[message.author.tag];
+      if (user && (params[0].length >= 1 && params[0].length <= 10) && !isNaN(params[1])) {
+        var amt = Number(params[1]);
+        var stock = await getStock(params[0].toUpperCase());
+        if (stock) {
+          buyStock(user, stock, amt)
+          setItem('users', users);
+        }
+      }
+    }
+
+    if (message.content.startsWith("#sell")) {
+      var command = message.content.slice(5, message.content.length).trim();
+      var params = command.split(' ');
+      var user = users[message.author.tag];
+      if (user && (params[0].length >= 1 && params[0].length <= 10) && !isNaN(params[1])) {
+        var stock = await getStock(params[0].toUpperCase());
+        var amt = Number(params[1]);
+        if (stock) {
+          sellStock(user, stock, amt);
+          setItem('users', users);
+        }
+      }
+    }
+
+    if (message.content.startsWith("#list orders")) {
+      var output = '';
+      for (let i = 0; i < orders.length; i++) {
+        let order = orders[i];
+        if (order.userId == message.author.tag) {
+          output += printOrder(order);
+        }
+      }
+
+      if (output.length > 0) {
+        message.reply(' **ORDERS:**\n' + output);
+      } else {
+        message.reply(' has no pending orders.');
+      }
+    }
+
+    if (message.content.startsWith("#delete order")) {
+      var command = message.content.slice(13, message.content.length).trim();
+      for (let i = 0; i < orders.length; i++) {
+        let order = orders[i];
+        if (order.orderId == command) {
+          if (order.userId == message.author.tag) {
+            message.reply("**Order Deleted:**\n" + printOrder(order));
+
+            orders.splice(i, 1);
+            setItem('orders', orders);
           } else {
-            message.channel.send("invalid stock symbol");
+            message.reply(" you are not the owner of this order!");
           }
-        } catch (e) {
-          message.channel.send("something went wrong :\\");
+        } else {
+          message.reply(" no order under that ID found");
         }
       }
+    }
 
-      if (message.content.startsWith("#register")) {
-        registerUser(message.author.tag, message);
-      }
-
-      if (message.content.startsWith("#buy")) {
-        var command = message.content.slice(4, message.content.length).trim();
-        var params = command.split(' ');
-        var user = users[message.author.tag];
-        if (user && (params[0].length == 3 || params[0].length == 4) && !isNaN(params[1])) {
-          var amt = Number(params[1]);
-          var stock = await getStock(params[0].toUpperCase());
-          if (stock) {
-            buyStock(user, stock, amt)
-            setItem('users', users);
-          }
-        }
-      }
-
-      if (message.content.startsWith("#sell")) {
-        var command = message.content.slice(5, message.content.length).trim();
-        var params = command.split(' ');
-        var user = users[message.author.tag];
-        if (user && (params[0].length == 3 || params[0].length == 4) && !isNaN(params[1])) {
-          var stock = await getStock(params[0].toUpperCase());
-          var amt = Number(params[1]);
-          if (stock) {
-            sellStock(user, stock, amt);
-            setItem('users', users);
-          }
-        }
-      }
-
-      if (message.content.startsWith("#limit order") || message.content.startsWith("#stop order")) {
-        var command = message.content.slice(message.content.startsWith("#stop") ? 5 : 6, message.content.length).trim();
-        var params = command.split(' ');
-        var user = users[message.author.tag];
-        if (user &&
-          (params[0].toUpperCase() == "BUY" || params[0].toUpperCase() == "SELL") &&
-          (params[1].length == 3 || params[1].length == 4) &&
-          !isNaN(params[2]) &&
-          !isNaN(params[3])) {
-          var orderType = params[0].toUpperCase();
-          var stock = await getStock(params[1].toUpperCase());
+    if (message.content.startsWith("#limit order") || message.content.startsWith("#stop order")) {
+      var command = message.content.slice(message.content.startsWith("#stop") ? 11 : 12, message.content.length).trim();
+      var params = command.split(' ');
+      var user = users[message.author.tag];
+      if (user &&
+        (params[0].toUpperCase() == "BUY" || params[0].toUpperCase() == "SELL") &&
+        (params[1].length >= 1 && params[1].length <= 10) &&
+        !isNaN(params[2]) &&
+        !isNaN(params[3])) {
+        var orderType = params[0].toUpperCase();
+        var stock = await getStock(params[1].toUpperCase());
+        if (stock) {
           var amt = Number(params[2]);
           var orderPrice = Number(params[3]);
+          var orderId = guid();
           orders.push({
             userId: message.author.tag,
-            symbol: stock,
+            symbol: stock.Symbol,
             amount: amt,
             price: orderPrice,
             action: orderType,
             type: message.content.startsWith("#stop") ? "stop" : "limit",
-            timestamp: Date()
+            timestamp: Date(),
+            orderId: orderId
           })
+
+          message.reply(
+            '```' +
+            (message.content.startsWith("#stop") ? "limit order placed:\n" : "stop order placed:\n") +
+            orderType + ' ' + amt + ' share(s) of ' + stock.Symbol + ' at $' + orderPrice + '\nOrderId: ' + orderId + '```')
 
           setItem('orders', orders);
         }
       }
+    }
 
-      if (message.content.startsWith('#portfolio')) {
-        if (users[message.author.tag]) {
-          let summary = await getSummary(message.author.tag);
-          message.reply("**Portfolio:**\n" + summary);
-        }
+    if (message.content.startsWith('#portfolio')) {
+      if (users[message.author.tag]) {
+        let summary = await getSummary(message.author.tag);
+        message.reply("**Portfolio:**\n" + summary);
       }
-      console.log(message.content);
-    });
+    }
+    console.log(message.content);
   });
 });
 
-
+function printOrder(order) {
+  return '```' + order.type + ' ' + order.amount + ' share(s) of' + order.Symbol + ' at $' + order.price + '\nOrderId: ' + order.orderId + '```';
+}
 
 async function getStock(symbol) {
   var stock;
@@ -383,7 +432,17 @@ function printCommands() {
   #cash\tQuickly shows your remaining cash\n\n
   #quote SYM \tQueries the market for a quote on a specific stock.\nex: #quote MSFT\n\n
   #buy SYM AMT\tbuys stock with symbol 'SYM' in amount 'AMT'\nex: #buy MSFT 5\n\n
-  #sell SYM AMT\tsells stock with symbol 'SYM' in amount 'AMT'\nex: #sell MSFT 5\n\n\`\`\``}
+  #sell SYM AMT\tsells stock with symbol 'SYM' in amount 'AMT'\nex: #sell MSFT 5\n\n
+  #limit order BUY/SELL STOCK AMOUNT PRICE\tWill buy/sell a defined number of shares the next it goes below defined price\nex: #limit order buy MSFT 5 69\n\n
+  #stop order BUY/SELL STOCK AMOUNT PRICE\tWill buy/sell a defined number of shares the next it goes above defined price\nex: #stop order sell MSFT 5 75\n\n
+  #list orders\tLists the users pending orders\n\n
+  #delete orders ORDERID\tDeletes a pending order with the matching orderId\n\n
+  \`\`\``;
+}
+
+function printChangeList() {
+  return `**Changelist**\n\`\`\`Removed 3-4 character restrictions on Symbols\n\`\`\``
+}
 
 async function getSummary(userId) {
   var output = "";
@@ -423,3 +482,12 @@ function formatQuote(quote) {
 }
 
 client.login(botKey.apiKey());
+
+//thanks https://stackoverflow.com/questions/105034/create-guid-uuid-in-javascript
+function guid() {
+  function s4() {
+    return Math.floor((1 + Math.random()) * 0x10000).toString(16).substring(1);
+  }
+  return s4() + s4() + '-' + s4() + '-' + s4() + '-' +
+    s4() + '-' + s4() + s4() + s4();
+}

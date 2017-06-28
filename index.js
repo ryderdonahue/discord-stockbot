@@ -217,7 +217,7 @@ storage.getItem('version', async function (err, value) {
 
           message.reply(
             '```' +
-            (message.content.startsWith("#stop") ? "limit order placed:\n" : "stop order placed:\n") +
+            (message.content.startsWith("#stop") ? "stop order placed:\n" : "limit order placed:\n") +
             orderType + ' ' + amt + ' share(s) of ' + stock.Symbol + ' at $' + orderPrice + '\nOrderId: ' + orderId + '```')
 
           setItem('orders', orders);

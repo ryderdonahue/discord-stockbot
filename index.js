@@ -48,7 +48,6 @@ storage.getItem('version', async function (err, value) {
     users = await storage.getItem("users");
     market = await storage.getItem("market");
     myChannelId = await storage.getItem("myChannelId");
-    await storage.setItem("orders", orders);
     orders = await storage.getItem("orders");
     marketMonitorRate = await storage.getItem("marketMonitorRate");
   }
@@ -236,7 +235,7 @@ storage.getItem('version', async function (err, value) {
 });
 
 function printOrder(order) {
-  return '```' + order.type + ' ' + order.amount + ' share(s) of' + order.Symbol + ' at $' + order.price + '\nOrderId: ' + order.orderId + '```';
+  return '```' + order.type + ' ' + order.amount + ' share(s) of' + order.symbol + ' at $' + order.price + '\nOrderId: ' + order.orderId + '```';
 }
 
 async function getStock(symbol) {
@@ -293,19 +292,19 @@ function ConvertStock(quote) {
   return stock;
 }
 
-function processMarket() {
+async function processMarket() {
   if (myChannel && checkMarketOpen(false)) {
     // myChannel.sendMessage("processing orders...");
     for (let i = orders.length - 1; i >= 0; i--) {
       let currentOrder = orders[i];
-      let stock = getStock(currentOrder.symbol);
+      let stock = await getStock(currentOrder.symbol);
       if (stock) {
         if ((currentOrder.type == "stop" && currentOrder.price <= stock.LastTradeAmount) ||
           currentOrder.type == "limit" && currentOrder.price >= stock.LastTradeAmount) {
-          if (currentOrder.action == "buy") {
-            buyStock(users[currentOrder.userId], stock, amount);
+          if (currentOrder.action == "BUY") {
+            buyStock(users[currentOrder.userId], stock, currentOrder.amount);
           } else {
-            sellStock(users[currentOrder.userId], stock, amount);
+            sellStock(users[currentOrder.userId], stock, currentOrder.amount);
           }
 
           myChannel.sendMessage(currentOrder.type.toUpperCase() + " " +

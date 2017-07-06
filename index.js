@@ -351,6 +351,51 @@ function buyStock(user, stock, amount) {
   }
 }
 
+function calculcatePerformance(user, stock) {
+  if (user.stocks[stock.Symbol]) {
+    let currentValue = user.stocks[stock.Symbol] * stock.LastTradeAmount;
+    let performance = (((currentValue - user.costBasis) / user.costBasis) * 100).toFixed(2);
+  }
+}
+
+function adjustCostBasis(user) {
+  console.log("Adjusting Cost Basis: " + user.username);
+
+  for (let i = 0; i < user.trades.length; i++) {
+    let trade = user.trades[i];
+    if (trade.tradeType === "SELL" && trade.calculated === undefined) {
+      console.log("Found uncalculated trade: " + trade.symbol + " for " + trade.price + " of " + trade.amount + " shares.");
+      console.log("Cost Basis: " + user.costBasis[stock.Symbol]);
+      let sellAmount = trade.amount;
+      for (let j = 0; j < user.trades.length; j++) {
+        let buyTrade = user.trades[j];
+        if (buyTrade.tradeType === "BUY" &&
+          buyTrade.symbol === trade.symbol &&
+          (buyTrade.sold === undefined || buyTrade.sold < buyTrade.amount)) {
+          if (buyTrade.sold === undefined) {
+            buyTrade.sold = 0;
+          }
+
+          if (buyTrade.sold + sellAmount > buyTrade.amount) {
+            sellAmount -= buyTrade.amount - buyTrade.sold;
+            user.costBasis[stock.Symbol] -= (buyTrade.amount - buyTrade.sold) * buyTrade.price;
+            buyTrade.sold = buyTrade.amount;
+          } else {
+            user.costBasis[stock.Symbol] -= (sellAmount) * buyTrade.price;
+            buyTrade.sold += sellAmount;
+            sellAmount = 0;
+            trade.calculated = true;
+            console.log("Final Cost Basis: " + user.costBasis[stock.Symbol]);
+            break;
+          }
+        }
+      }
+    }
+  }
+
+  setItem('users', users);
+}
+
 function sellStock(user, stock, amt) {
   if (checkMarketOpen(true)) {
     if (stock && user && amt > 0) {

@@ -171,20 +171,24 @@ storage.getItem('version', async function (err, value) {
 
     if (message.content.startsWith("#delete order")) {
       var command = message.content.slice(13, message.content.length).trim();
+      var orderFound = false;
       for (let i = 0; i < orders.length; i++) {
         let order = orders[i];
         if (order.orderId == command) {
           if (order.userId == message.author.tag) {
             message.reply("**Order Deleted:**\n" + printOrder(order));
-
             orders.splice(i, 1);
             setItem('orders', orders);
+            orderFound = true;
+            break;
           } else {
             message.reply(" you are not the owner of this order!");
           }
-        } else {
-          message.reply(" no order under that ID found");
         }
+      }
+
+      if (!orderFound) {
+        message.reply(" no order under that ID found");
       }
     }
 
@@ -261,6 +265,9 @@ async function getStock(symbol) {
 
 async function RetrieveWebStock(symbol) {
   var stock = null;
+  // const resp2 = await fetch('https://finance.google.com/finance/info?q='+symbol);
+  // https://www.google.com/finance/chart?cht=g&q=NASDAQ:AMZN&tkr=1&p=1d&enddatetime=2017-07-07T16:00:03Z
+  // let body2 = await resp2.text();
   const response = await fetch('http://ws.cdyne.com/delayedstockquote/delayedstockquote.asmx/GetQuote?StockSymbol=' + symbol + '&LicenseKey=0');
   let body = await response.text();
   var xmlBody = convert.xml2js(body, {
@@ -327,6 +334,7 @@ function buyStock(user, stock, amount) {
       if (user.cash - stock.LastTradeAmount * amount > 0) {
         if (!user.stocks[stock.Symbol]) {
           user.stocks[stock.Symbol] = 0;
+          user.costBasis[stock.Symbol] = 0;
         }
 
         user.cash -= stock.LastTradeAmount * amount;
@@ -354,12 +362,32 @@ function buyStock(user, stock, amount) {
 function calculcatePerformance(user, stock) {
   if (user.stocks[stock.Symbol]) {
     let currentValue = user.stocks[stock.Symbol] * stock.LastTradeAmount;
-    let performance = (((currentValue - user.costBasis) / user.costBasis) * 100).toFixed(2);
+    let performance = (((currentValue - user.costBasis[stock.Symbol]) / user.costBasis[stock.Symbol]) * 100).toFixed(2);
+
+    return performance;
   }
+
+  return 0;
 }
 
 function adjustCostBasis(user) {
   console.log("Adjusting Cost Basis: " + user.username);
+  //todo improve this, or not
+  for (let costBasis in user.costBasis) {
+    if (costBasis == null || costBasis == undefined || isNaN(costBasis)) {
+      let stockAmount = user.stocks[costBasis];
+      for (let i = user.trades.length - 1; i >= 0; i--) {
+        let trade = user.trades[i];
+        if (trade.tradeType === "BUY" && trade.symbol == costBasis && user.stocks[costBasis]) {
+          user.costBasis[costBasis] = trade.price * trade.amount;
+          stockAmount -= trade.amount;
+          if (stockAmount <= 0) {
+            break;
+          }
+        }
+      }
+    }
+  }
 
   for (let i = 0; i < user.trades.length; i++) {
     let trade = user.trades[i];
@@ -480,7 +508,7 @@ function printCommands() {
   #limit order BUY/SELL STOCK AMOUNT PRICE\tWill buy/sell a defined number of shares the next it goes below defined price\nex: #limit order buy MSFT 5 69\n\n
   #stop order BUY/SELL STOCK AMOUNT PRICE\tWill buy/sell a defined number of shares the next it goes above defined price\nex: #stop order sell MSFT 5 75\n\n
   #list orders\tLists the users pending orders\n\n
-  #delete orders ORDERID\tDeletes a pending order with the matching orderId\n\n
+  #delete order ORDERID\tDeletes a pending order with the matching orderId\n\n
   \`\`\``;
 }
 
@@ -492,15 +520,26 @@ async function getSummary(userId) {
   var output = "";
   if (users[userId]) {
     var user = users[userId];
-    var netWorth = user.cash;
+    adjustCostBasis(user);
+    var netWorth = 0;
     var stockList = '';
+    var totalCostBasis = 0;
     for (let stock in user.stocks) {
       let stockValue = await getStock(stock);
+      let performance = calculcatePerformance(user, stockValue);
+      if (performance > 0) {
+        performance = '+' + performance;
+      }
+
       netWorth += stockValue.LastTradeAmount * user.stocks[stock];
-      stockList += stock + ' \t ' + user.stocks[stock] + ' shares \t $' + (stockValue.LastTradeAmount * user.stocks[stock]).toFixed(2) + ' \n';
+      totalCostBasis += user.costBasis[stock];
+      stockList += stock + '\t' + user.stocks[stock] + ' shares\tvalue: $' + (stockValue.LastTradeAmount * user.stocks[stock]).toFixed(2) + '\t' + performance + '%\tprice: $' + stockValue.LastTradeAmount + '\tbasis: $' + user.costBasis[stock].toFixed(2) + '\n';
     }
 
-    output += "Total Net Worth: $" + netWorth.toFixed(2) + '\n';
+    output += "Total Net Worth: $" + (user.cash + netWorth).toFixed(2) + '\n';
+    output += "Total Cost Basis: $" + totalCostBasis.toFixed(2) + "\n";
+    output += "Total Stock Worth: $" + netWorth.toFixed(2) + "\n";
+    output += "Total Stock Performance: " + (100 * (netWorth - totalCostBasis) / totalCostBasis).toFixed(2) + "%\n";;
     output += 'Cash: $' + user.cash.toFixed(2) + '\n';
     output += 'Stocks: \n```';
     output += stockList;

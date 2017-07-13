@@ -153,6 +153,18 @@ storage.getItem('version', async function (err, value) {
       }
     }
 
+    if (message.content.startsWith("#reset costbasis")) {
+      var user = users[message.author.tag];
+      if (user) {
+        resetCostBasis(user);
+        message.reply("**RESET**");
+      }
+    }
+
+    if (message.content.startsWith("#leaderboard")) {
+      printLeaderboard();
+    }
+
     if (message.content.startsWith("#list orders")) {
       var output = '';
       for (let i = 0; i < orders.length; i++) {
@@ -264,6 +276,33 @@ async function getStock(symbol) {
 }
 
 async function RetrieveWebStock(symbol) {
+  if (market[symbol]) {
+    var stock = null;
+    const resp2 = await fetch('https://finance.google.com/finance/info?q=' + symbol);
+    let body2 = await resp2.text();
+    body2 = body2.slice(4);
+    let jsonResponse = JSON.parse(body2);
+    return UpdateStock(jsonResponse[0], market[symbol]);
+  } else {
+    // https://www.google.com/finance/chart?cht=g&q=NASDAQ:AMZN&tkr=1&p=1d&enddatetime=2017-07-07T16:00:03Z
+    // let body2 = await resp2.text();
+    const response = await fetch('http://ws.cdyne.com/delayedstockquote/delayedstockquote.asmx/GetQuote?StockSymbol=' + symbol + '&LicenseKey=0');
+    let body = await response.text();
+    var xmlBody = convert.xml2js(body, {
+      compact: true,
+      spaces: 4
+    });
+
+    return ConvertStockQuote(xmlBody.QuoteData);
+  }
+}
+
+function UpdateStock(json, stock) {
+  stock.LastTradeAmount = Number(json.l.replace(',', '')).toFixed(2);
+  return stock;
+}
+
+async function RetrieveWebStockQuote(symbol) {
   var stock = null;
   // const resp2 = await fetch('https://finance.google.com/finance/info?q='+symbol);
   // https://www.google.com/finance/chart?cht=g&q=NASDAQ:AMZN&tkr=1&p=1d&enddatetime=2017-07-07T16:00:03Z
@@ -278,7 +317,7 @@ async function RetrieveWebStock(symbol) {
   return ConvertStock(xmlBody.QuoteData);
 }
 
-function ConvertStock(quote) {
+function ConvertStockQuote(quote) {
   var stock = {
     ChangePercent: quote.ChangePercent._text,
     CompanyName: quote.CompanyName._text,
@@ -370,21 +409,57 @@ function calculcatePerformance(user, stock) {
   return 0;
 }
 
+function resetCostBasis(user) {
+  for (let costBasis in user.costBasis) {
+    user.costBasis[costBasis] = undefined;
+  }
+
+  for (let i = 0; i < user.trades.length; i++) {
+    let trade = user.trades[i];
+    if (trade.tradeType === "BUY") {
+      trade.sold = undefined;
+    }
+    if (trade.tradeType === "SELL") {
+      trade.calculated = undefined;
+    }
+  }
+
+
+  return adjustCostBasis(user);
+}
+/*
+  users[userId] = {
+    userId: userId,
+    userUid: message.author.id,
+    username: message.author.username,
+    cash: 10000,
+    stocks: {},
+    costBasis: {},
+    watching: [],
+    trades: [],
+    */
+
+
 function adjustCostBasis(user) {
   console.log("Adjusting Cost Basis: " + user.username);
   //todo improve this, or not
   for (let costBasis in user.costBasis) {
     if (costBasis == null || costBasis == undefined || isNaN(costBasis)) {
       let stockAmount = user.stocks[costBasis];
-      for (let i = user.trades.length - 1; i >= 0; i--) {
-        let trade = user.trades[i];
-        if (trade.tradeType === "BUY" && trade.symbol == costBasis && user.stocks[costBasis]) {
-          user.costBasis[costBasis] = trade.price * trade.amount;
-          stockAmount -= trade.amount;
-          if (stockAmount <= 0) {
-            break;
+      user.costBasis[costBasis] = 0;
+      if (stockAmount) {
+        for (let i = user.trades.length - 1; i >= 0; i--) {
+          let trade = user.trades[i];
+          if (trade.tradeType === "BUY" && trade.symbol == costBasis && user.stocks[costBasis]) {
+            user.costBasis[costBasis] += trade.price * trade.amount;
+            stockAmount -= trade.amount;
+            if (stockAmount <= 0) {
+              break;
+            }
           }
         }
+      } else {
+        user.costBasis[costBasis] = 0;
       }
     }
   }
@@ -393,7 +468,7 @@ function adjustCostBasis(user) {
     let trade = user.trades[i];
     if (trade.tradeType === "SELL" && trade.calculated === undefined) {
       console.log("Found uncalculated trade: " + trade.symbol + " for " + trade.price + " of " + trade.amount + " shares.");
-      console.log("Cost Basis: " + user.costBasis[stock.Symbol]);
+      console.log("Cost Basis: " + user.costBasis[trade.Symbol]);
       let sellAmount = trade.amount;
       for (let j = 0; j < user.trades.length; j++) {
         let buyTrade = user.trades[j];
@@ -406,14 +481,14 @@ function adjustCostBasis(user) {
 
           if (buyTrade.sold + sellAmount > buyTrade.amount) {
             sellAmount -= buyTrade.amount - buyTrade.sold;
-            user.costBasis[stock.Symbol] -= (buyTrade.amount - buyTrade.sold) * buyTrade.price;
+            user.costBasis[trade.symbol] -= (buyTrade.amount - buyTrade.sold) * buyTrade.price;
             buyTrade.sold = buyTrade.amount;
           } else {
-            user.costBasis[stock.Symbol] -= (sellAmount) * buyTrade.price;
+            user.costBasis[trade.symbol] -= (sellAmount) * buyTrade.price;
             buyTrade.sold += sellAmount;
             sellAmount = 0;
             trade.calculated = true;
-            console.log("Final Cost Basis: " + user.costBasis[stock.Symbol]);
+            console.log("Final Cost Basis: " + user.costBasis[trade.symbol]);
             break;
           }
         }
@@ -421,7 +496,11 @@ function adjustCostBasis(user) {
     }
   }
 
+  users[user.userId] = user;
+
   setItem('users', users);
+
+  return user;
 }
 
 function sellStock(user, stock, amt) {
@@ -429,7 +508,6 @@ function sellStock(user, stock, amt) {
     if (stock && user && amt > 0) {
       if (user.stocks[stock.Symbol] && user.stocks[stock.Symbol] >= amt) {
         user.stocks[stock.Symbol] -= amt;
-        user.costBasis[stock.Symbol] -= stock.LastTradeAmount * amt;
         if (user.stocks[stock.Symbol] == 0) {
           delete user.stocks[stock.Symbol];
         }
@@ -520,7 +598,7 @@ async function getSummary(userId) {
   var output = "";
   if (users[userId]) {
     var user = users[userId];
-    adjustCostBasis(user);
+    user = resetCostBasis(user);
     var netWorth = 0;
     var stockList = '';
     var totalCostBasis = 0;
@@ -533,23 +611,57 @@ async function getSummary(userId) {
 
       netWorth += stockValue.LastTradeAmount * user.stocks[stock];
       totalCostBasis += user.costBasis[stock];
-      stockList += stock + '\t' + user.stocks[stock] + ' shares\tvalue: $' + (stockValue.LastTradeAmount * user.stocks[stock]).toFixed(2) + '\t' + performance + '%\tprice: $' + stockValue.LastTradeAmount + '\tbasis: $' + user.costBasis[stock].toFixed(2) + '\n';
+      stockList += stock + '\t' + user.stocks[stock] + ' shares\t' + performance + '%\tvalue: $' + (stockValue.LastTradeAmount * user.stocks[stock]).toFixed(2) + '\tbasis: $' + user.costBasis[stock].toFixed(2) + '\tprice: $' + stockValue.LastTradeAmount + '\n';
     }
 
     output += "Total Net Worth: $" + (user.cash + netWorth).toFixed(2) + '\n';
     output += "Total Cost Basis: $" + totalCostBasis.toFixed(2) + "\n";
     output += "Total Stock Worth: $" + netWorth.toFixed(2) + "\n";
-    output += "Total Stock Performance: " + (100 * (netWorth - totalCostBasis) / totalCostBasis).toFixed(2) + "%\n";;
     output += 'Cash: $' + user.cash.toFixed(2) + '\n';
-    output += 'Stocks: \n```';
-    output += stockList;
-    output += '```\n';
+    if (Object.keys(user.stocks).length > 0) {
+      output += "Total Stock Performance: " + (100 * (netWorth - totalCostBasis) / totalCostBasis).toFixed(2) + "%\n";;
+      output += 'Stocks: \n```';
+      output += stockList;
+      output += '```\n';
+    } else {
+      output += "¯\\_(ツ)\_/¯"
+    }
 
   } else {
     output = userId + "not registed with Stockbot";
   }
 
   return output;
+}
+
+
+async function printLeaderboard() {
+  var leaderboard = [];
+  for (let userId in users) {
+    let user = users[userId];
+    var netWorth = 0;
+    for (let stock in user.stocks) {
+      let stockValue = await getStock(stock);
+      netWorth += stockValue.LastTradeAmount * user.stocks[stock];
+    }
+
+    netWorth += user.cash;
+    leaderboard.push({ name: user.username, networth: netWorth });
+  }
+
+  leaderboard.sort(function (a, b) {
+    return b.networth - a.networth;
+  });
+
+  var leads = "**Leaderboard**\n```";
+  for (let i = 0; i < leaderboard.length; i++) {
+    user = leaderboard[i];
+    leads += "#" + (i + 1) + "   " + user.name + "\n     $" + user.networth.toFixed(2) + "\n\n";
+  }
+
+  leads += "```";
+
+  myChannel.sendMessage(leads);
 }
 
 function formatQuote(quote) {

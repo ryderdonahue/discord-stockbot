@@ -1,3 +1,13 @@
+/* TODO 
+  Add charts: 
+    // https://www.google.com/finance/chart?cht=g&q=NASDAQ:AMZN&tkr=1&p=1d&enddatetime=2017-07-07T16:00:03Z
+  Add portfolio [user]
+  Add daily leaderboard post
+  Add crypto trading
+  Add historical leaderboard tracking
+*/
+
+
 var convert = require('xml-js');
 var http = require('http');
 const Discord = require('discord.js');
@@ -284,8 +294,6 @@ async function RetrieveWebStock(symbol) {
     let jsonResponse = JSON.parse(body2);
     return UpdateStock(jsonResponse[0], market[symbol]);
   } else {
-    // https://www.google.com/finance/chart?cht=g&q=NASDAQ:AMZN&tkr=1&p=1d&enddatetime=2017-07-07T16:00:03Z
-    // let body2 = await resp2.text();
     const response = await fetch('http://ws.cdyne.com/delayedstockquote/delayedstockquote.asmx/GetQuote?StockSymbol=' + symbol + '&LicenseKey=0');
     let body = await response.text();
     var xmlBody = convert.xml2js(body, {
@@ -299,23 +307,21 @@ async function RetrieveWebStock(symbol) {
 
 function UpdateStock(json, stock) {
   stock.LastTradeAmount = Number(json.l.replace(',', '')).toFixed(2);
+  stock.LastUpdated = Date();
   return stock;
 }
 
-async function RetrieveWebStockQuote(symbol) {
-  var stock = null;
-  // const resp2 = await fetch('https://finance.google.com/finance/info?q='+symbol);
-  // https://www.google.com/finance/chart?cht=g&q=NASDAQ:AMZN&tkr=1&p=1d&enddatetime=2017-07-07T16:00:03Z
-  // let body2 = await resp2.text();
-  const response = await fetch('http://ws.cdyne.com/delayedstockquote/delayedstockquote.asmx/GetQuote?StockSymbol=' + symbol + '&LicenseKey=0');
-  let body = await response.text();
-  var xmlBody = convert.xml2js(body, {
-    compact: true,
-    spaces: 4
-  });
+// async function RetrieveWebStockQuote(symbol) {
+//   var stock = null;
+//   const response = await fetch('http://ws.cdyne.com/delayedstockquote/delayedstockquote.asmx/GetQuote?StockSymbol=' + symbol + '&LicenseKey=0');
+//   let body = await response.text();
+//   var xmlBody = convert.xml2js(body, {
+//     compact: true,
+//     spaces: 4
+//   });
 
-  return ConvertStock(xmlBody.QuoteData);
-}
+//   return ConvertStock(xmlBody.QuoteData);
+// }
 
 function ConvertStockQuote(quote) {
   var stock = {
@@ -427,18 +433,6 @@ function resetCostBasis(user) {
 
   return adjustCostBasis(user);
 }
-/*
-  users[userId] = {
-    userId: userId,
-    userUid: message.author.id,
-    username: message.author.username,
-    cash: 10000,
-    stocks: {},
-    costBasis: {},
-    watching: [],
-    trades: [],
-    */
-
 
 function adjustCostBasis(user) {
   console.log("Adjusting Cost Basis: " + user.username);

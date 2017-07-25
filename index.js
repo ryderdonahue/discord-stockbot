@@ -286,7 +286,13 @@ async function getStock(symbol) {
 }
 
 async function RetrieveWebStock(symbol) {
-  if (market[symbol]) {
+  // TODO: Put this into it's own codepath so it doesn't block trading these stock symbols
+  if (market[symbol] == 'ETH' || market[symbol] == 'BTC' || market[symbol] == 'LTC') { 
+    const response = await fetch('https://api.gdax.com/products/' + market[symbol] + '-USD/ticker');
+    const jsonResponse = JSON.parse(response.text());
+    return ConvertGdaxQuote(jsonResponse, market[symbol]);
+  }
+  else if (market[symbol]) {
     var stock = null;
     const resp2 = await fetch('https://finance.google.com/finance/info?q=' + symbol);
     let body2 = await resp2.text();
@@ -323,6 +329,36 @@ function UpdateStock(json, stock) {
 //   return ConvertStock(xmlBody.QuoteData);
 // }
 
+function ConvertGdaxQuote(ticker, currency) {
+  let companyName = '';
+  switch(currency) {
+    case 'ETH':
+      companyName = 'Ethereum';
+      break;
+    case 'BTC':
+      companyName = 'Bitcoin';
+      break;
+    case 'LTC':
+      companyName = 'Litecoin';
+      break;
+  }
+
+  // TODO: All N/A figures can all be gotten from the 'candles' API on GDAX
+  var crypto = {
+    ChangePercent: 'N/A',
+    CompanyName: companyName,
+    Symbol: currency,
+    DayHigh: 'N/A',
+    DayLow: 'N/A',
+    FiftyTwoWeekRange: 'N/A',
+    LastTradeAmount: ticker.price,
+    LastTradeDateTime: Date.parse(ticker.time),
+    LastUpdated: Date()
+  };
+
+  return crypto;
+}
+
 function ConvertStockQuote(quote) {
   var stock = {
     ChangePercent: quote.ChangePercent._text,
@@ -333,11 +369,6 @@ function ConvertStockQuote(quote) {
     FiftyTwoWeekRange: quote.FiftyTwoWeekRange._text,
     LastTradeAmount: quote.LastTradeAmount._text,
     LastTradeDateTime: quote.LastTradeDateTime._text,
-    OpenAmount: quote.OpenAmount._text,
-    PreviousClose: quote.PrevCls._text,
-    PE: quote.PE._text,
-    StockChange: quote.StockChange._text,
-    StockVolume: quote.StockVolume._text,
     LastUpdated: Date()
   };
 

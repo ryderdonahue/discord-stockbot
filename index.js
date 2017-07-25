@@ -633,7 +633,7 @@ async function printLeaderboard() {
   var leaderboard = [];
   for (let userId in users) {
     let user = users[userId];
-    var netWorth = 0;
+    var netWorth = -10000;
     for (let stock in user.stocks) {
       let stockValue = await getStock(stock);
       netWorth += stockValue.LastTradeAmount * user.stocks[stock];

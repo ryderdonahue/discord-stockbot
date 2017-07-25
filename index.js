@@ -287,10 +287,10 @@ async function getStock(symbol) {
 
 async function RetrieveWebStock(symbol) {
   // TODO: Put this into it's own codepath so it doesn't block trading these stock symbols
-  if (market[symbol] == 'ETH' || market[symbol] == 'BTC' || market[symbol] == 'LTC') { 
-    const response = await fetch('https://api.gdax.com/products/' + market[symbol] + '-USD/ticker');
+  if (symbol == 'ETH' || symbol == 'BTC' || symbol == 'LTC') { 
+    const response = await fetch('https://api.gdax.com/products/' + symbol + '-USD/ticker');
     const jsonResponse = JSON.parse(response.text());
-    return ConvertGdaxQuote(jsonResponse, market[symbol]);
+    return ConvertGdaxQuote(jsonResponse, symbol);
   }
   else if (market[symbol]) {
     var stock = null;

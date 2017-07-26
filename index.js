@@ -305,7 +305,8 @@ async function RetrieveWebStock(symbol) {
   var symbolName = symbol.toUpperCase();
   if (symbolName === 'ETH' || symbolName === 'BTC' || symbolName === 'LTC') {
     const response = await fetch('https://api.gdax.com/products/' + symbol + '-USD/ticker');
-    const jsonResponse = JSON.parse(response.text());
+    const text = await response.text();
+    const jsonResponse = JSON.parse(text);
     return ConvertGdaxQuote(jsonResponse, symbol);
   }
   else if (market[symbol]) {
@@ -367,7 +368,7 @@ function ConvertGdaxQuote(ticker, currency) {
     DayHigh: 'N/A',
     DayLow: 'N/A',
     FiftyTwoWeekRange: 'N/A',
-    LastTradeAmount: ticker.price,
+    LastTradeAmount: Number.parseFloat(ticker.price),
     LastTradeDateTime: Date.parse(ticker.time),
     LastUpdated: Date()
   };
@@ -421,7 +422,7 @@ async function processMarket() {
 }
 
 function buyStock(user, stock, amount) {
-  if (checkMarketOpen(true)) {
+  if (checkMarketOpen(true, stock)) {
     if (stock && user && amount > 0) {
       if (user.cash - stock.LastTradeAmount * amount > 0) {
         if (!user.stocks[stock.Symbol]) {
@@ -443,7 +444,7 @@ function buyStock(user, stock, amount) {
 
         setItem('users', users);
         myChannel.sendMessage("<@" + user.userUid + ">```BUY: " + stock.Symbol + "\t AMOUNT: " + amount +
-          "\t PRICE: $" + stock.LastTradeAmount + "\t\nTOTAL: $" + (stock.LastTradeAmount * amount).toFixed(2) + "```");
+          "\t PRICE: $" + stock.LastTradeAmount.toFixed(2) + "\t\nTOTAL: $" + (stock.LastTradeAmount * amount).toFixed(2) + "```");
       } else {
         myChannel.sendMessage("<@" + user.userUid + ">\n you are short $" + Math.abs(user.cash - stock.LastTradeAmount * amount).toFixed(2) + " for this transaction");
       }
@@ -545,7 +546,7 @@ function adjustCostBasis(user) {
 }
 
 function sellStock(user, stock, amt) {
-  if (checkMarketOpen(true)) {
+  if (checkMarketOpen(true, stock)) {
     if (stock && user && amt > 0) {
       if (user.stocks[stock.Symbol] && user.stocks[stock.Symbol] >= amt) {
         user.stocks[stock.Symbol] -= amt;
@@ -556,7 +557,7 @@ function sellStock(user, stock, amt) {
         user.cash += stock.LastTradeAmount * amt;
 
         myChannel.sendMessage("<@" + user.userUid + ">```SELL: " + stock.Symbol + "\t AMOUNT: " + amt + "\t PRICE: $" +
-          stock.LastTradeAmount + "\t \nTOTAL: $" + (stock.LastTradeAmount * amt) + "```");
+          stock.LastTradeAmount.toFixed(2) + "\t \nTOTAL: $" + (stock.LastTradeAmount * amt).toFixed(2) + "```");
         user.trades.push({
           timestamp: Date(),
           tradeType: "SELL",
@@ -574,7 +575,11 @@ function sellStock(user, stock, amt) {
   }
 }
 
-function checkMarketOpen(showMessage) {
+function checkMarketOpen(showMessage, stock) {
+  if (stock.Symbol === 'ETH' || stock.Symbol === 'BTC' || stock.Symbol === 'LTC') {
+    return true; // crypto is always open!!
+  }
+
   let hour = new Date().getUTCHours();
   let day = new Date().getUTCDay();
   let minute = new Date().getUTCMinutes();
@@ -652,7 +657,7 @@ async function getSummary(userId) {
 
       netWorth += stockValue.LastTradeAmount * user.stocks[stock];
       totalCostBasis += user.costBasis[stock];
-      stockList += stock + '\t' + user.stocks[stock] + ' shares\t' + performance + '%\tvalue: $' + (stockValue.LastTradeAmount * user.stocks[stock]).toFixed(2) + '\tbasis: $' + user.costBasis[stock].toFixed(2) + '\tprice: $' + stockValue.LastTradeAmount + '\n';
+      stockList += stock + '\t' + user.stocks[stock] + ' shares\t' + performance + '%\tvalue: $' + (stockValue.LastTradeAmount * user.stocks[stock]).toFixed(2) + '\tbasis: $' + user.costBasis[stock].toFixed(2) + '\tprice: $' + stockValue.LastTradeAmount.toFixed(2) + '\n';
     }
 
     output += "Total Net Worth: $" + (user.cash + netWorth).toFixed(2) + '\n';
@@ -720,10 +725,10 @@ function formatQuote(quote) {
 function formatCryptoQuote(ticker, currency) {
   var output = "";
   output += "**" + currency + "**" + " \t _" + ticker.CompanyName + "_\n";
-  output += "```" + "Last Trade Amount: $" + ticker.price + "\n";
-  output += "Day Change: " + ticker.ChangePercent + "\n";
-  output += "Day High/Low: " + ticker.DayHigh + " / " + ticker.DayLow + "\n";
-  output += "Year Range: " + ticker.FiftyTwoWeekRange + "\n";
+  output += "```" + "Last Trade Amount: $" + ticker.LastTradeAmount.toFixed(2) + "\n";
+  //output += "Day Change: " + ticker.ChangePercent + "\n";
+  //output += "Day High/Low: " + ticker.DayHigh + " / " + ticker.DayLow + "\n";
+  //output += "Year Range: " + ticker.FiftyTwoWeekRange + "\n";
   output += "```";
 
   return output;

@@ -101,7 +101,7 @@ storage.getItem('version', async function (err, value) {
         const symbolName = stock.trim().toUpperCase();
 
         // Crypto        
-        if (symbolName === 'ETH' || symbolName === 'BTC' || symbolName === 'lTC') {
+        if (symbolName === 'ETH' || symbolName === 'BTC' || symbolName === 'LTC') {
           var crypto = await RetrieveWebStock(symbolName);
           if (crypto) {
             message.channel.send(formatCryptoQuote(crypto, symbolName));

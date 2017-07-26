@@ -98,33 +98,48 @@ storage.getItem('version', async function (err, value) {
 
     if (message.content.startsWith("#quote")) {
       try {
-        var stock = message.content.slice(6, message.content.length).trim();
-        if (stock.length >= 1 && stock.length <= 10) {
-          var options = {
-            host: 'ws.cdyne.com',
-            port: 80,
-            path: '/delayedstockquote/delayedstockquote.asmx/GetQuote?StockSymbol=' + stock.trim() + '&LicenseKey=0'
-          };
+        const symbolName = stock.trim().toUpperCase();
 
-          http.get(options, function (resp) {
-            resp.setEncoding('utf8');
+        // Crypto        
+        if (symbolName === 'ETH' || symbolName === 'BTC' || symbolName === 'lTC') {
+          var crypto = await RetrieveWebStock(symbolName);
+          if (crypto) {
+            message.channel.send(formatCryptoQuote(crypto, symbolName));
+          }
+          else {
+            message.channel.send("something went wrong :\\");
+          }
+        }
+        // Stock
+        else {
+          var stock = message.content.slice(6, message.content.length).trim();
+          if (stock.length >= 1 && stock.length <= 10) {
+            var options = {
+              host: 'ws.cdyne.com',
+              port: 80,
+              path: '/delayedstockquote/delayedstockquote.asmx/GetQuote?StockSymbol=' + stock.trim() + '&LicenseKey=0'
+            };
 
-            resp.on('data', function (chunk) {
-              try {
-                var result1 = convert.xml2js(chunk, {
-                  compact: true,
-                  spaces: 4
-                });
-                message.channel.send(formatQuote(result1.QuoteData));
-              } catch (e) {
-                message.channel.send("something went wrong :\\");
-              }
+            http.get(options, function (resp) {
+              resp.setEncoding('utf8');
+
+              resp.on('data', function (chunk) {
+                try {
+                  var result1 = convert.xml2js(chunk, {
+                    compact: true,
+                    spaces: 4
+                  });
+                  message.channel.send(formatQuote(result1.QuoteData));
+                } catch (e) {
+                  message.channel.send("something went wrong :\\");
+                }
+              });
+            }).on("error", function (e) {
+              console.log("Got error: " + e.message);
             });
-          }).on("error", function (e) {
-            console.log("Got error: " + e.message);
-          });
-        } else {
-          message.channel.send("invalid stock symbol");
+          } else {
+            message.channel.send("invalid stock symbol");
+          }
         }
       } catch (e) {
         message.channel.send("something went wrong :\\");
@@ -256,6 +271,7 @@ storage.getItem('version', async function (err, value) {
         message.reply("**Portfolio:**\n" + summary);
       }
     }
+
     console.log(message.content);
   });
 });
@@ -287,7 +303,8 @@ async function getStock(symbol) {
 
 async function RetrieveWebStock(symbol) {
   // TODO: Put this into it's own codepath so it doesn't block trading these stock symbols
-  if (symbol == 'ETH' || symbol == 'BTC' || symbol == 'LTC') { 
+  var symbolName = symbol.toUpperCase();
+  if (symbolName === 'ETH' || symbolName === 'BTC' || symbolName === 'LTC') {
     const response = await fetch('https://api.gdax.com/products/' + symbol + '-USD/ticker');
     const jsonResponse = JSON.parse(response.text());
     return ConvertGdaxQuote(jsonResponse, symbol);
@@ -331,7 +348,7 @@ function UpdateStock(json, stock) {
 
 function ConvertGdaxQuote(ticker, currency) {
   let companyName = '';
-  switch(currency) {
+  switch (currency) {
     case 'ETH':
       companyName = 'Ethereum';
       break;
@@ -696,6 +713,18 @@ function formatQuote(quote) {
   output += "Day Change: " + quote.ChangePercent._text + "\n";
   output += "Day High/Low: " + quote.DayHigh._text + " / " + quote.DayLow._text + "\n";
   output += "Year Range: " + quote.FiftyTwoWeekRange._text + "\n";
+  output += "```";
+
+  return output;
+}
+
+function formatCryptoQuote(ticker, currency) {
+  var output = "";
+  output += "**" + currency + "**" + " \t _" + ticker.CompanyName + "_\n";
+  output += "```" + "Last Trade Amount: $" + ticker.price + "\n";
+  output += "Day Change: " + ticker.ChangePercent + "\n";
+  output += "Day High/Low: " + ticker.DayHigh + " / " + ticker.DayLow + "\n";
+  output += "Year Range: " + ticker.FiftyTwoWeekRange + "\n";
   output += "```";
 
   return output;

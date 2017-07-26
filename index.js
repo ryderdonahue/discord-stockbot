@@ -98,13 +98,13 @@ storage.getItem('version', async function (err, value) {
 
     if (message.content.startsWith("#quote")) {
       try {
-        const symbolName = stock.trim().toUpperCase();
+        var stock = message.content.slice(6, message.content.length).trim().toUpperCase();
 
         // Crypto        
-        if (symbolName === 'ETH' || symbolName === 'BTC' || symbolName === 'LTC') {
-          var crypto = await RetrieveWebStock(symbolName);
+        if (stock === 'ETH' || stock === 'BTC' || stock === 'LTC') {
+          var crypto = await RetrieveWebStock(stock);
           if (crypto) {
-            message.channel.send(formatCryptoQuote(crypto, symbolName));
+            message.channel.send(formatCryptoQuote(crypto, stock));
           }
           else {
             message.channel.send("something went wrong :\\");
@@ -112,7 +112,6 @@ storage.getItem('version', async function (err, value) {
         }
         // Stock
         else {
-          var stock = message.content.slice(6, message.content.length).trim();
           if (stock.length >= 1 && stock.length <= 10) {
             var options = {
               host: 'ws.cdyne.com',

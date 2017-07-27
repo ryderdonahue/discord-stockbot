@@ -77,7 +77,14 @@ storage.getItem('version', async function (err, value) {
   });
 
   client.on('message', async function (message) {
-    if (message.content.startsWith("#monitor channel")) {
+
+    if (message.content.startsWith("#")) {
+
+      message.content = message.content.replace('#', '!');
+      message.reply(" please prefix all commands with **!** from now on instead of *#*\nthe proper syntax would be ```" + message.content + "```");
+    }
+
+    if (message.content.startsWith("!monitor channel")) {
       myChannel = message.channel;
       setItem('myChannelId', myChannel.id);
 
@@ -85,18 +92,18 @@ storage.getItem('version', async function (err, value) {
       myChannel.sendMessage(printCommands());
     }
 
-    if (message.content.startsWith("#help")) {
+    if (message.content.startsWith("!help")) {
       myChannel.sendMessage(printCommands());
     }
 
-    if (message.content.startsWith("#cash")) {
+    if (message.content.startsWith("!cash")) {
       if (users[message.author.tag]) {
         var user = users[message.author.tag];
         message.reply('Cash: $' + user.cash.toFixed(2))
       }
     }
 
-    if (message.content.startsWith("#quote")) {
+    if (message.content.startsWith("!quote")) {
       try {
         var stock = message.content.slice(6, message.content.length).trim().toUpperCase();
 
@@ -145,11 +152,11 @@ storage.getItem('version', async function (err, value) {
       }
     }
 
-    if (message.content.startsWith("#register")) {
+    if (message.content.startsWith("!register")) {
       registerUser(message.author.tag, message);
     }
 
-    if (message.content.startsWith("#buy")) {
+    if (message.content.startsWith("!buy")) {
       var command = message.content.slice(4, message.content.length).trim();
       var params = command.split(' ');
       var user = users[message.author.tag];
@@ -163,7 +170,7 @@ storage.getItem('version', async function (err, value) {
       }
     }
 
-    if (message.content.startsWith("#sell")) {
+    if (message.content.startsWith("!sell")) {
       var command = message.content.slice(5, message.content.length).trim();
       var params = command.split(' ');
       var user = users[message.author.tag];
@@ -177,7 +184,7 @@ storage.getItem('version', async function (err, value) {
       }
     }
 
-    if (message.content.startsWith("#reset costbasis")) {
+    if (message.content.startsWith("!reset costbasis")) {
       var user = users[message.author.tag];
       if (user) {
         resetCostBasis(user);
@@ -185,11 +192,19 @@ storage.getItem('version', async function (err, value) {
       }
     }
 
-    if (message.content.startsWith("#leaderboard")) {
+    if (message.content.startsWith("!leaderboard")) {
       printLeaderboard();
     }
 
-    if (message.content.startsWith("#list orders")) {
+    if (message.content.startsWith("!github")) {
+      message.reply(" you can contribute to Stockbot @ https://github.com/ryderdonahue/discord-stockbot")
+    }
+
+    if (message.content.startsWith("!changelog")) {
+      printChangeLog();
+    }
+
+    if (message.content.startsWith("!list orders")) {
       var output = '';
       for (let i = 0; i < orders.length; i++) {
         let order = orders[i];
@@ -205,7 +220,7 @@ storage.getItem('version', async function (err, value) {
       }
     }
 
-    if (message.content.startsWith("#delete order")) {
+    if (message.content.startsWith("!delete order")) {
       var command = message.content.slice(13, message.content.length).trim();
       var orderFound = false;
       for (let i = 0; i < orders.length; i++) {
@@ -228,8 +243,8 @@ storage.getItem('version', async function (err, value) {
       }
     }
 
-    if (message.content.startsWith("#limit order") || message.content.startsWith("#stop order")) {
-      var command = message.content.slice(message.content.startsWith("#stop") ? 11 : 12, message.content.length).trim();
+    if (message.content.startsWith("!limit order") || message.content.startsWith("!stop order")) {
+      var command = message.content.slice(message.content.startsWith("!stop") ? 11 : 12, message.content.length).trim();
       var params = command.split(' ');
       var user = users[message.author.tag];
       if (user &&
@@ -249,14 +264,14 @@ storage.getItem('version', async function (err, value) {
             amount: amt,
             price: orderPrice,
             action: orderType,
-            type: message.content.startsWith("#stop") ? "stop" : "limit",
+            type: message.content.startsWith("!stop") ? "stop" : "limit",
             timestamp: Date(),
             orderId: orderId
           })
 
           message.reply(
             '```' +
-            (message.content.startsWith("#stop") ? "stop order placed:\n" : "limit order placed:\n") +
+            (message.content.startsWith("!stop") ? "stop order placed:\n" : "limit order placed:\n") +
             orderType + ' ' + amt + ' share(s) of ' + stock.Symbol + ' at $' + orderPrice + '\nOrderId: ' + orderId + '```')
 
           setItem('orders', orders);
@@ -264,7 +279,7 @@ storage.getItem('version', async function (err, value) {
       }
     }
 
-    if (message.content.startsWith('#portfolio')) {
+    if (message.content.startsWith('!portfolio')) {
       if (users[message.author.tag]) {
         let summary = await getSummary(message.author.tag);
         message.reply("**Portfolio:**\n" + summary);
@@ -623,16 +638,18 @@ function printRules() {
 
 function printCommands() {
   return `**Bot Commands**\n\`\`\`
-  #register\tRegisters user with the bot. Also can be used to reset account.\n\n
-  #portfolio\tDisplays the users current portfolio\n\n
-  #cash\tQuickly shows your remaining cash\n\n
-  #quote SYM \tQueries the market for a quote on a specific stock.\nex: #quote MSFT\n\n
-  #buy SYM AMT\tbuys stock with symbol 'SYM' in amount 'AMT'\nex: #buy MSFT 5\n\n
-  #sell SYM AMT\tsells stock with symbol 'SYM' in amount 'AMT'\nex: #sell MSFT 5\n\n
-  #limit order BUY/SELL STOCK AMOUNT PRICE\tWill buy/sell a defined number of shares the next it goes below defined price\nex: #limit order buy MSFT 5 69\n\n
-  #stop order BUY/SELL STOCK AMOUNT PRICE\tWill buy/sell a defined number of shares the next it goes above defined price\nex: #stop order sell MSFT 5 75\n\n
-  #list orders\tLists the users pending orders\n\n
-  #delete order ORDERID\tDeletes a pending order with the matching orderId\n\n
+  !changelog\tDisplays current changelog.\n\n
+  !github\tDisplays github url.\n\n
+  !register\tRegisters user with the bot. Also can be used to reset account.\n\n
+  !portfolio\tDisplays the users current portfolio\n\n
+  !cash\tQuickly shows your remaining cash\n\n
+  !quote SYM \tQueries the market for a quote on a specific stock.\nex: !quote MSFT\n\n
+  !buy SYM AMT\tbuys stock with symbol 'SYM' in amount 'AMT'\nex: !buy MSFT 5\n\n
+  !sell SYM AMT\tsells stock with symbol 'SYM' in amount 'AMT'\nex: !sell MSFT 5\n\n
+  !limit order BUY/SELL STOCK AMOUNT PRICE\tWill buy/sell a defined number of shares the next it goes below defined price\nex: !limit order buy MSFT 5 69\n\n
+  !stop order BUY/SELL STOCK AMOUNT PRICE\tWill buy/sell a defined number of shares the next it goes above defined price\nex: !stop order sell MSFT 5 75\n\n
+  !list orders\tLists the users pending orders\n\n
+  !delete order ORDERID\tDeletes a pending order with the matching orderId\n\n
   \`\`\``;
 }
 
@@ -657,7 +674,7 @@ async function getSummary(userId) {
 
       netWorth += stockValue.LastTradeAmount * user.stocks[stock];
       totalCostBasis += user.costBasis[stock];
-      stockList += stock + '\t' + user.stocks[stock] + ' shares\t' + performance + '%\tvalue: $' + (stockValue.LastTradeAmount * user.stocks[stock]).toFixed(2) + '\tbasis: $' + user.costBasis[stock].toFixed(2) + '\tprice: $' + stockValue.LastTradeAmount.toFixed(2) + '\n';
+      stockList += stock + '\t' + user.stocks[stock] + ' shares\t' + performance + '%\tvalue: $' + (stockValue.LastTradeAmount * user.stocks[stock]).toFixed(2) + '\tbasis: $' + user.costBasis[stock].toFixed(2) + '\tprice: $' + stockValue.LastTradeAmount + '\n';
     }
 
     output += "Total Net Worth: $" + (user.cash + netWorth).toFixed(2) + '\n';
@@ -680,6 +697,10 @@ async function getSummary(userId) {
   return output;
 }
 
+function printChangeLog() {
+  var changelog = "**Changelog**\n```\nJuly 26\nAdded support for crypto currency trading, thanks Anthony!\n\tSupported currencies are:\n\tEtherium (ETH)\n\tLitecoin (LTC)\n\tBitcoin (BTC)\n\nChanged all command prefix to start with ! as to prevent channel complete UI```";
+  myChannel.sendMessage(changelog);
+}
 
 async function printLeaderboard() {
   var leaderboard = [];

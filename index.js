@@ -66,13 +66,14 @@ storage.getItem('version', async function (err, value) {
   client.on('ready', () => {
     console.log(botKey.apiKey());
     setInterval(processMarket, marketMonitorRate);
-
     if (myChannelId !== undefined) {
       client.channels.forEach(channel => {
         if (channel.id == myChannelId) {
           myChannel = channel;
         }
       });
+
+      processMarket();      
     }
   });
 
@@ -591,7 +592,7 @@ function sellStock(user, stock, amt) {
 }
 
 function checkMarketOpen(showMessage, stock) {
-  if (stock.Symbol === 'ETH' || stock.Symbol === 'BTC' || stock.Symbol === 'LTC') {
+  if (stock && (stock.Symbol === 'ETH' || stock.Symbol === 'BTC' || stock.Symbol === 'LTC')) {
     return true; // crypto is always open!!
   }
 

@@ -592,8 +592,6 @@ function sellStock(user, stock, amt) {
 }
 
 function checkMarketOpen(showMessage, stock) {
-  return true;
-
   if (stock && (stock.Symbol === 'ETH' || stock.Symbol === 'BTC' || stock.Symbol === 'LTC')) {
     return true; // crypto is always open!!
   }

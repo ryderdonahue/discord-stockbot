@@ -73,7 +73,7 @@ storage.getItem('version', async function (err, value) {
         }
       });
 
-      processMarket();      
+      processMarket();
     }
   });
 
@@ -292,7 +292,7 @@ storage.getItem('version', async function (err, value) {
 });
 
 function printOrder(order) {
-  return '```' + order.type + ' ' + order.amount + ' share(s) of' + order.symbol + ' at $' + order.price + '\nOrderId: ' + order.orderId + '```';
+  return '```' + order.type + ' ' + order.action + ' ' + order.amount + ' share(s) of ' + order.symbol + ' at $' + order.price + '\nOrderId: ' + order.orderId + '```';
 }
 
 async function getStock(symbol) {
@@ -460,7 +460,7 @@ function buyStock(user, stock, amount) {
 
         setItem('users', users);
         myChannel.sendMessage("<@" + user.userUid + ">```BUY: " + stock.Symbol + "\t AMOUNT: " + amount +
-          "\t PRICE: $" + stock.LastTradeAmount.toFixed(2) + "\t\nTOTAL: $" + (stock.LastTradeAmount * amount).toFixed(2) + "```");
+          "\t PRICE: $" + stock.LastTradeAmount + "\t\nTOTAL: $" + (stock.LastTradeAmount * amount).toFixed(2) + "```");
       } else {
         myChannel.sendMessage("<@" + user.userUid + ">\n you are short $" + Math.abs(user.cash - stock.LastTradeAmount * amount).toFixed(2) + " for this transaction");
       }
@@ -573,7 +573,7 @@ function sellStock(user, stock, amt) {
         user.cash += stock.LastTradeAmount * amt;
 
         myChannel.sendMessage("<@" + user.userUid + ">```SELL: " + stock.Symbol + "\t AMOUNT: " + amt + "\t PRICE: $" +
-          stock.LastTradeAmount.toFixed(2) + "\t \nTOTAL: $" + (stock.LastTradeAmount * amt).toFixed(2) + "```");
+          stock.LastTradeAmount + "\t \nTOTAL: $" + (stock.LastTradeAmount * amt).toFixed(2) + "```");
         user.trades.push({
           timestamp: Date(),
           tradeType: "SELL",
@@ -592,6 +592,8 @@ function sellStock(user, stock, amt) {
 }
 
 function checkMarketOpen(showMessage, stock) {
+  return true;
+
   if (stock && (stock.Symbol === 'ETH' || stock.Symbol === 'BTC' || stock.Symbol === 'LTC')) {
     return true; // crypto is always open!!
   }

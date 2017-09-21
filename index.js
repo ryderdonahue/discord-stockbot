@@ -193,6 +193,10 @@ storage.getItem('version', async function (err, value) {
       }
     }
 
+    if (message.content.startsWith("!nonsense")) {
+        message.reply(nonsense[Math.round(Math.random() * (nonsense.length - 1))]);
+    }
+
     if (message.content.startsWith("!leaderboard")) {
       printLeaderboard();
     }
@@ -700,7 +704,7 @@ async function getSummary(userId) {
 }
 
 function printChangeLog() {
-  var changelog = "**Changelog**\n```\nJuly 26\nAdded support for crypto currency trading, thanks Anthony!\n\tSupported currencies are:\n\tEtherium (ETH)\n\tLitecoin (LTC)\n\tBitcoin (BTC)\n\nChanged all command prefix to start with ! as to prevent channel complete UI```";
+  var changelog = "**Changelog**\n```\nSeptember 20\nSwitched back to old query service as Google's fast quote service has been taken down\nAdded !nonsense\nJuly 26\nAdded support for crypto currency trading, thanks Anthony!\n\tSupported currencies are:\n\tEtherium (ETH)\n\tLitecoin (LTC)\n\tBitcoin (BTC)\n\nChanged all command prefix to start with ! as to prevent channel complete UI```";
   myChannel.sendMessage(changelog);
 }
 
@@ -767,3 +771,29 @@ function guid() {
   return s4() + s4() + '-' + s4() + '-' + s4() + '-' +
     s4() + '-' + s4() + s4() + s4();
 }
+
+var nonsense = ['\"The stock market is filled with individuals who know the price of everything, but the value of nothing.\" – Phillip Fisher',
+'\"You get recession, you get stock market declines. If you don’t understand that’s going to happen, then you are not ready and you will not do well in the markets.\" – Peter Lynch',
+'\"An investment in knowledge pays the best interest.\" – Benjamin Franklin',
+'\"I will tell you how to become rich. Close the doors. Be fearful when others are greedy. Be greedy when others are fearful.\" – Warren Buffett',
+'\"A thousand point gain or a thousand point decline does not alter the fact that we are saving for retirement or building up funds for education.\" – Don Connelly',
+'\"People’s everyday routines will keep the stock market going.\" – Don Connelly',
+'\"The stock market is the only market that when prices are slashed, clients run away!\" – Don Connelly',
+'\"Know what you own, and know why you own it.\" – Peter Lynch',
+'\"Don’t be satisfied with stories, how things have gone with others. Unfold your own myth.\" – Rumi',
+'\"You miss 100% of the shots you don’t take.\" – Wayne Gretzky',
+'\"They can conquer who believe they can.\" – Virgil',
+'\"If you are passionate about people achieving their goals, they will choose you over the less passionate competition.\" – Don Connelly',
+'\"Sometimes survival means leaving your comfort zone to make your own way.\" – Don Connelly',
+'\"If you believe you can do it, go out there and do it, because that is the only way you are gonna get it!\" – Harry Main',
+'\"Genius is one percent inspiration, ninety nine percent perspiration.\" – Thomas Alva Edison',
+'\"Try to be a rainbow in someone’s cloud.\" – Maya Angelou',
+'\"“In every life we have some trouble. When you worry you make it double. Don’t worry, be happy.\" – Bobby McFerrin',
+'\"If opportunity doesn’t knock, build a door.\" – Milton Berle',
+'\"Whatever you fight, you Strengthen, And what you resist , persists.\" – Eckhart Tolle',
+'\"If you are making mistakes, it means you’re out there doing something.\" – Neil Gaiman',
+'\"Obstacles are those frightful things you see when you take your eyes off your goal.\" – Henry Ford',
+'\"There have been a lot of lucky sprinters in history, but there have been no lucky marathoners. It takes planning and perseverance to win a marathon.\" – Don Connelly',
+'\"Only those who are asleep make no mistakes.\" – Ingvar Kamprad',
+'\"The harder you work, the luckier you get.\" – Gary Player',
+'\"Our greatest glory is not in never falling, but in rising every time we fall.\" – Confucius',];

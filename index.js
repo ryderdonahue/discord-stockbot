@@ -325,14 +325,15 @@ async function RetrieveWebStock(symbol) {
     const jsonResponse = JSON.parse(text);
     return ConvertGdaxQuote(jsonResponse, symbol);
   }
-  else if (market[symbol]) {
-    var stock = null;
-    const resp2 = await fetch('https://finance.google.com/finance/info?q=' + symbol);
-    let body2 = await resp2.text();
-    body2 = body2.slice(4);
-    let jsonResponse = JSON.parse(body2);
-    return UpdateStock(jsonResponse[0], market[symbol]);
-  } else {
+  // TODO: REPLACE/FIND FAST QUERY SERVICE
+  // else if (market[symbol]) {
+  //   var stock = null;
+  //   const resp2 = await fetch('https://finance.google.com/finance/info?q=' + symbol);
+  //   let body2 = await resp2.text();
+  //   body2 = body2.slice(4);
+  //   let jsonResponse = JSON.parse(body2);
+  //   return UpdateStock(jsonResponse[0], market[symbol]);
+  // } else {
     const response = await fetch('http://ws.cdyne.com/delayedstockquote/delayedstockquote.asmx/GetQuote?StockSymbol=' + symbol + '&LicenseKey=0');
     let body = await response.text();
     var xmlBody = convert.xml2js(body, {
@@ -341,7 +342,7 @@ async function RetrieveWebStock(symbol) {
     });
 
     return ConvertStockQuote(xmlBody.QuoteData);
-  }
+  // }
 }
 
 function UpdateStock(json, stock) {
